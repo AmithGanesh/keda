@@ -26,6 +26,7 @@ type kafkaScaler struct {
 }
 
 type kafkaMetadata struct {
+	metricName       string
 	bootstrapServers []string
 	group            string
 	topic            string
@@ -54,7 +55,6 @@ const (
 )
 
 const (
-	lagThresholdMetricName   = "lagThreshold"
 	kafkaMetricType          = "External"
 	defaultKafkaLagThreshold = 10
 )
@@ -108,12 +108,17 @@ func parseKafkaMetadata(resolvedEnv, metadata, authParams map[string]string) (ka
 	}
 	meta.topic = metadata["topic"]
 
+	if metadata["metricName"] != "" {
+		meta.metricName = metadata["metricName"]
+	} else {
+		meta.metricName = metadata["topic"] + "-" + metadata["consumerGroup"]
+	}
 	meta.lagThreshold = defaultKafkaLagThreshold
 
-	if val, ok := metadata[lagThresholdMetricName]; ok {
+	if val, ok := metadata["lagThreshold"]; ok {
 		t, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			return meta, fmt.Errorf("error parsing %s: %s", lagThresholdMetricName, err)
+			return meta, fmt.Errorf("error parsing lagThreshold: %s", err)
 		}
 		meta.lagThreshold = t
 	}
@@ -330,7 +335,7 @@ func (s *kafkaScaler) GetMetricSpecForScaling() []v2beta1.MetricSpec {
 	return []v2beta1.MetricSpec{
 		{
 			External: &v2beta1.ExternalMetricSource{
-				MetricName:         lagThresholdMetricName,
+				MetricName:         s.metadata.metricName,
 				TargetAverageValue: resource.NewQuantity(s.metadata.lagThreshold, resource.DecimalSI),
 			},
 			Type: kafkaMetricType,
